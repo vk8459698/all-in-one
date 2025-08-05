@@ -2,7 +2,7 @@
 
 [![Visual Demo](https://img.shields.io/badge/Visual-Demo-8A2BE2)](https://taejun.kim/music-dissector/)
 [![arXiv](https://img.shields.io/badge/arXiv-2307.16425-B31B1B)](http://arxiv.org/abs/2307.16425/)
-[![Hugging Face Space](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-f9f107)](https://huggingface.co/spaces/taejunkim/all-in-one/)
+[![Hugging Face Space](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-f9f107)](https://huggingface.co/spaces/bla/all-in-one)
 [![PyPI - Version](https://img.shields.io/pypi/v/allin1.svg)](https://pypi.org/project/allin1)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/allin1.svg)](https://pypi.org/project/allin1)
 
@@ -22,6 +22,7 @@ This package provides models for music structure analysis, predicting:
 - [Installation](#installation)
 - [Usage for CLI](#usage-for-cli)
 - [Usage for Python](#usage-for-python)
+- [Usage for FastAPI/App](#usage-for-fastapiapp)
 - [Visualization & Sonification](#visualization--sonification)
 - [Available Models](#available-models)
 - [Speed](#speed)
@@ -37,13 +38,20 @@ This package provides models for music structure analysis, predicting:
 Visit [PyTorch](https://pytorch.org/) and install the appropriate version for your system.
 
 ### 2. Install NATTEN (Required for Linux and Windows; macOS will auto-install)
-* **Linux**: Download from [NATTEN website](https://www.shi-labs.com/natten/)
+
+**Important**: Use the following version of `natten` to avoid compatibility issues:
+
+* **Linux**: 
+```shell
+pip install git+https://github.com/SHI-Labs/NATTEN.git@v0.14.6
+```
 * **macOS**: Auto-installs with `allin1`.
 * **Windows**: Build from source:
 ```shell
 pip install ninja # Recommended, not required
-git clone https://github.com/SHI-Labs/NATTEN
+git clone https://github.com/SHI-Labs/NATTEN.git
 cd NATTEN
+git checkout v0.14.6
 make
 ```
 
@@ -297,6 +305,70 @@ Path to the directory where the sonifications will be saved. By default, the son
 List of tuples or a single tuple containing the sonified audio and the sampling rate.
 
 
+## Usage for FastAPI/App
+
+### Running the FastAPI Server
+
+To start the FastAPI server for web-based music structure analysis:
+
+```python
+# app.py
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+import allin1
+import tempfile
+import os
+
+app = FastAPI()
+
+@app.post("/analyze/")
+async def analyze_audio(file: UploadFile = File(...)):
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+        temp_file.write(await file.read())
+        temp_path = temp_file.name
+    
+    try:
+        # Analyze the audio file
+        result = allin1.analyze(temp_path)
+        
+        # Convert result to dict for JSON response
+        response_data = {
+            "path": result.path,
+            "bpm": result.bpm,
+            "beats": result.beats,
+            "downbeats": result.downbeats,
+            "beat_positions": result.beat_positions,
+            "segments": [
+                {"start": seg.start, "end": seg.end, "label": seg.label}
+                for seg in result.segments
+            ]
+        }
+        
+        return JSONResponse(content=response_data)
+    
+    finally:
+        # Clean up temporary file
+        os.unlink(temp_path)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+```
+
+Run the FastAPI server:
+```shell
+python app.py
+```
+
+Or using uvicorn directly:
+```shell
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+The API will be available at `http://localhost:8000` with interactive documentation at `http://localhost:8000/docs`.
+
+
 ## Visualization & Sonification
 This package provides a simple visualization (`-v` or `--visualize`) and sonification (`-s` or `--sonify`) function for the analysis results.
 ```shell
@@ -315,7 +387,7 @@ The sonifications will be saved in the `./sonif` directory by default:
 For example, a visualization looks like this:
 ![Visualization](./assets/viz.png)
 
-You can try it at [Hugging Face Space](https://huggingface.co/spaces/taejunkim/all-in-one).
+You can try it at [Hugging Face Space](https://huggingface.co/spaces/bla/all-in-one).
 
 
 ## Available Models
